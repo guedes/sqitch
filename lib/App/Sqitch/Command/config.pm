@@ -4,16 +4,15 @@ use v5.10;
 use strict;
 use warnings;
 use utf8;
-use Carp;
 use Path::Class ();
 use Try::Tiny;
-use List::Util qw(sum first);
+use List::Util qw(first);
 use Moose;
 use Moose::Util::TypeConstraints;
 use namespace::autoclean;
 extends 'App::Sqitch::Command';
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 has file => (is => 'ro', lazy => 1, default => sub {
     my $self = shift;
@@ -23,23 +22,24 @@ has file => (is => 'ro', lazy => 1, default => sub {
 
 has action  => (is => 'ro', isa => enum([qw(
     get
-    get_all
-    get_regex
+    get-all
+    get-regex
     set
     unset
     list
     edit
     add
-    unset_all
-    rename_section
-    remove_section
+    replace-all
+    unset-all
+    rename-section
+    remove-section
 )]));
 has context => (is => 'ro', required => 1, default => 'project', isa => enum([qw(
     project
     user
     system
 )]));
-has type => (is => 'ro', isa => enum([qw(int num bool)]));
+has type => (is => 'ro', isa => enum([qw(int num bool bool-or-int)]));
 
 sub options {
     return qw(
@@ -49,12 +49,14 @@ sub options {
 
         int
         bool
+        bool-or-int
         num
 
         get
         get-all
         get-regex
         add
+        replace-all
         unset
         unset-all
         rename-section
@@ -72,21 +74,22 @@ sub configure {
     $class->usage('Only one config file at a time.') if @file > 1;
 
     # Make sure we have only one type.
-    my @type = grep { $opt->{$_} } qw(bool int num);
+    my @type = grep { $opt->{$_} } qw(bool int num bool-or-int);
     $class->usage('Only one type at a time.') if @type > 1;
 
     # Make sure we are performing only one action.
     my @action = grep { $opt->{$_} } qw(
         get
-        get_all
-        get_regex
+        get-all
+        get-regex
         unset
         list
         edit
         add
+        replace-all
         unset_all
-        rename_section
-        remove_section
+        rename-section
+        remove-section
     );
     $class->usage('Only one action at a time.') if @action > 1;
 
@@ -105,6 +108,7 @@ sub configure {
 sub execute {
     my $self = shift;
     my $action = $self->action || (@_ > 1 ? 'set' : 'get');
+    $action =~ s/-/_/g;
     my $meth = $self->can($action)
         or die 'No method defined for ', $self->action, ' action';
 
@@ -188,6 +192,21 @@ sub get_regex {
 
 sub set {
     my ($self, $key, $value, $rx) = @_;
+    $self->_set($key, $value, $rx, multiple => 0);
+}
+
+sub add {
+    my ($self, $key, $value) = @_;
+    $self->_set($key, $value, undef, multiple => 1);
+}
+
+sub replace_all {
+    my ($self, $key, $value, $rx) = @_;
+    $self->_set($key, $value, $rx, multiple => 1, replace_all => 1);
+}
+
+sub _set {
+    my ($self, $key, $value, $rx, @p) = @_;
     $self->usage('Wrong number of arguments.')
         if !defined $key || $key eq '' || !defined $value;
 
@@ -199,29 +218,13 @@ sub set {
             filename => $self->file,
             filter   => $rx,
             as       => $self->type,
-            multiple => 0,
+            @p,
         );
     } catch {
         $self->fail('Cannot overwrite multiple values with a single value')
             if /^Multiple occurrences/i;
         $self->fail($_);
     };
-    return $self;
-}
-
-sub add {
-    my ($self, $key, $value) = @_;
-    $self->usage('Wrong number of arguments.')
-        if !defined $key || $key eq '' || !defined $value;
-
-    $self->_touch_dir;
-    $self->sqitch->config->set(
-        key      => $key,
-        value    => $value,
-        filename => $self->file,
-        as       => $self->type,
-        multiple => 1,
-    );
     return $self;
 }
 
@@ -400,21 +403,27 @@ The action to be executed. May be one of:
 
 =item * C<get>
 
-=item * C<get_all>
+=item * C<get-all>
 
-=item * C<get_regex>
+=item * C<get-regex>
 
 =item * C<set>
 
 =item * C<add>
 
+=item * C<replace-all>
+
 =item * C<unset>
 
-=item * C<unset_all>
+=item * C<unset-all>
 
 =item * C<list>
 
 =item * C<edit>
+
+=item * C<rename-section>
+
+=item * C<remove-section>
 
 =back
 
@@ -449,6 +458,8 @@ The type to cast a value to be set to or fetched as. May be one of:
 =item * C<int>
 
 =item * C<num>
+
+=item * C<bool-or-int>
 
 =back
 
@@ -506,8 +517,15 @@ has multiple values.
 
   $config->add($key, $value);
 
-Adds a value for a key. If the key already exist, the value will be added as
+Adds a value for a key. If the key already exists, the value will be added as
 an additional value.
+
+=head3 C<replace_all>
+
+  $config->replace_all($key, $value);
+  $config->replace_all($key, $value, $regex);
+
+Replace all matching values.
 
 =head3 C<unset>
 
@@ -584,6 +602,8 @@ The Sqitch command-line client.
 =over
 
 =item * Make exit codes the same as C<git-config>.
+
+=item * Implement C<--local>.
 
 =back
 

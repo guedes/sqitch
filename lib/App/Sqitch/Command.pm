@@ -52,6 +52,13 @@ sub load {
 
 sub configure {
     my ($class, $config, $options) = @_;
+
+    # Convert option keys with dashes to underscores.
+    for my $k (keys %{ $options }) {
+        next unless (my $nk = $k) =~ s/-/_/g;
+        $options->{$nk} = delete $options->{$k};
+    }
+
     return Hash::Merge->new->merge(
         $options,
         $config->get_section(section => $class->command),
@@ -72,13 +79,9 @@ sub _parse_opts {
 
     my %opts;
     Getopt::Long::Configure(qw(bundling no_pass_through));
-    Getopt::Long::GetOptionsFromArray($args, map {
-        (my $k = $_) =~ s/[|=+:!].*//;
-        $k =~ s/-/_/g;
-        $_ => \$opts{$k};
-    } $class->options) or $class->_pod2usage;
+    Getopt::Long::GetOptionsFromArray($args, \%opts, $class->options)
+        or $class->_pod2usage;
 
-    delete $opts{$_} for grep { !defined $opts{$_} } keys %opts;
     return \%opts;
 }
 
@@ -189,7 +192,24 @@ sub help {
 
 sub usage {
     my $self = shift;
-    $self->_pod2usage('-message' => join '', @_);
+    require Pod::Find;
+    my $upod = _bn . '-' . $self->command .  '-usage';
+    $self->_pod2usage(
+        '-input' => Pod::Find::pod_where({'-inc' => 1 }, $upod) || undef,
+        '-message' => join '', @_
+    );
+}
+
+sub bail {
+    my ($self, $code) = (shift, shift);
+    if (@_) {
+        if ($code) {
+            say STDERR @_;
+        } else {
+            say STDOUT @_;
+        }
+    }
+    exit $code;
 }
 
 __PACKAGE__->meta->make_immutable;
@@ -220,10 +240,9 @@ App::Sqitch::Command is the base class for all Sqitch commands.
 
 Returns a list of L<Getopt::Long> options specifications. When C<load> loads
 the class, any options passed to the command will be parsed using these
-values. They keys in the resulting hash will be the first part of each option,
-with dashes replaced with underscores. This hash will be passed to
-C<configure> along with a L<App::Sqitch::Config> object for munging into
-parameters to be passed to the constructor.
+values. The keys in the resulting hash will be the first part of each option.
+This hash will be passed to C<configure> along with a L<App::Sqitch::Config>
+object for munging into parameters to be passed to the constructor.
 
 Here's an example excerpted from the C<config> command:
 
@@ -250,9 +269,10 @@ command-line options as specified by C<options>. The returned hash should be
 the result of munging these two objects into a hash reference of parameters to
 be passed to the command subclass constructor.
 
-By default, this method simply merges the configuration values with the
-command-line options, with the command-line options taking priority. You may
-wish to override this method to do something different.
+By default, this method converts dashes to underscores in command-line options
+keys, and then merges the configuration values with the options, with the
+command-line options taking priority. You may wish to override this method to
+do something different.
 
 =head2 Constructors
 
@@ -289,12 +309,12 @@ An array reference of command-line arguments passed to the command.
 
 =head3 C<new>
 
-  my $cmd = App::Sqitch::Command->new(\%params);
+  my $cmd = App::Sqitch::Command->new(%params);
 
-Instantiates and returns a App::Sqitch::Command object. This method is
-designed to be overridden by subclasses, as an instance of the base
-App::Sqitch::Command class is probably useless. Call C<new> on a subclass, or
-use C<init>, instead.
+Instantiates and returns a App::Sqitch::Command object. This method is not
+designed to be overridden by subclasses; they should implement
+L<C<BUILDARGS>|Moose::Manual::Construction/BUILDARGS> or
+L<C<BUILD>|Moose::Manual::Construction/BUILD>, instead.
 
 =head2 Accessors
 
@@ -421,6 +441,13 @@ or "Options". Any or all of those will be shown.
 
 Sends messages to C<STDERR> and exists with an additional message to "See
 sqitch --help". Use if the user has misused the app.
+
+=head3 C<bail>
+
+  $cmd->bail(3, 'The config file is invalid');
+
+Exits with the specified error code, sending any specified messages to
+C<STDOUT> if the exit code is 0, and to C<STDERR> if it is not 0.
 
 =head1 See Also
 

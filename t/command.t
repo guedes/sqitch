@@ -12,7 +12,7 @@ BEGIN {
     $SIG{__DIE__} = \&Carp::confess;
 }
 
-use Test::More tests => 84;
+use Test::More tests => 97;
 #use Test::More 'no_plan';
 use App::Sqitch;
 use Test::Exception;
@@ -76,6 +76,8 @@ is_deeply $CLASS->configure($config, {}), {foo => 'hi'},
     'Should get config with no options';
 is_deeply $CLASS->configure($config, {foo => 'yo'}), {foo => 'yo'},
     'Options should override config';
+is_deeply $CLASS->configure($config, {'foo-bar' => 'yo'}), {foo => 'hi', foo_bar => 'yo'},
+    'Options keys should have dashes changed to underscores';
 
 ##############################################################################
 # Test load().
@@ -168,10 +170,10 @@ my $args = [qw(
     whatever
 )];
 is_deeply $cmd->_parse_opts($args), {
-    foo      => 1,
-    hi_there => 1,
-    icky_foo => 0,
-    feathers => 'down',
+    'foo'      => 1,
+    'hi-there' => 1,
+    'icky-foo' => 0,
+    'feathers' => 'down',
 }, 'Subclass should parse options spec';
 is_deeply $args, ['whatever'], 'Args array should be cleared of options';
 
@@ -335,12 +337,42 @@ is capture_stderr {
 }, "sqch: This that\nsqch: and the other. See sqch --help\n",
     'help should work';
 
-# Help.
 is capture_stderr {
     throws_ok { $cmd->help('This ', "that\n", "and the other.") }
         qr/EXITED: 1/
 }, "sqch: This that\nsqch: and the other. See sqch --help\n",
     'help should work';
+
+# Usage.
+like capture_stderr {
+    throws_ok { $cmd->usage('Invalid whozit') } qr/EXITED: 2/
+}, qr/Invalid whozit/, 'usage should work';
+
+like capture_stderr {
+    throws_ok { $cmd->usage('Invalid whozit') } qr/EXITED: 2/
+}, qr/\Qsqitch [<options>] <command> [<command-options>] [<args>]/,
+    'usage should prefer sqitch-$command-usage';
+
+# Bail.
+is capture_stdout {
+    throws_ok { $cmd->bail(0, 'This ', "that\n", "and the other") }
+        qr/EXITED: 0/
+}, "This that\nand the other\n",
+    'bail should work with exit code 0';
+
+is capture_stdout {
+    throws_ok { $cmd->bail(0) } qr/EXITED: 0/
+}, '',  'bail 0 should emit nothing when no messages';
+
+is capture_stderr {
+    throws_ok { $cmd->bail(1, 'This ', "that\n", "and the other") }
+        qr/EXITED: 1/
+}, "This that\nand the other\n",
+    'bail should work with exit code 1';
+
+is capture_stderr {
+    throws_ok { $cmd->bail(2) } qr/EXITED: 2/
+}, '',  'bail 2 should emit nothing when no messages';
 
 ##############################################################################
 # Test do_system().
@@ -356,3 +388,4 @@ is capture_stdout {
         $^X, File::Spec->catfile(qw(t die.pl)), qw(hi there)
     ), 'Should get fail back from do_system die';
 }, "hi there\n", 'The die script should have run';
+

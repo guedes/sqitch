@@ -11,7 +11,7 @@ use utf8;
 
 extends 'Config::GitLike';
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 has '+confname' => (
     default => 'sqitch.conf',
@@ -36,6 +36,7 @@ sub user_file {
 }
 
 sub project_file {
+    return $ENV{SQITCH_CONFIG} if $ENV{SQITCH_CONFIG};
     return file +File::Spec->curdir, shift->confname;
 }
 
@@ -97,7 +98,8 @@ defined, or else C<~/.sqitch/sqitch.conf>.
 =head3 C<project_file>
 
 Returns the path to the project configuration file, which is just
-F<./sqitch.conf>.
+F<./sqitch.conf>, unless C<$SQITCH_CONFIG> is set, in which case its value
+will be returned.
 
 =head3 C<dir_file>
 

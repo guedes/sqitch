@@ -1,31 +1,69 @@
-App/Sqitch version 0.11
-=======================
+package App::Sqitch::Plan;
 
-This application, `sqitch`, will provide a simple yet robust interface for SQL
-change management. The philosophy and functionality is covered over a series
-of blog posts published in January, 2012:
+use v5.10;
+use strict;
+use warnings;
+use utf8;
+use Path::Class;
+use namespace::autoclean;
+use Moose;
 
-* [Simple SQL Change Management](http://justatheory.com/computers/databases/simple-sql-change-management.html)
-* [VCS-Enabled SQL Change Management](http://justatheory.com/computers/databases/vcs-sql-change-management.html)
-* [SQL Change Management Sans Duplication](http://justatheory.com/computers/databases/sql-change-management-sans-redundancy.html)
+has file => (is => 'ro', required => 1, default => sub {
+    file 'sqitch.plan';
+});
 
-But it's not there yet. It's under heavy development. Hopefully it will be
-quasi-usable soon, as there is
-[a deadline](http://www.pgcon.org/2012/schedule/events/479.en.html). Watch
-this space.
+__PACKAGE__->meta->make_immutable;
+no Moose;
 
-Installation
-------------
+__END__
 
-To install this module, type the following:
+=head1 Name
 
-    perl Build.PL
-    ./Build
-    ./Build test
-    ./Build install
+App::Sqitch::Plan - Sqitch Deployment Plan
 
-Licence
--------
+=head1 Synopsis
+
+  my $plan = App::Sqitch::Plan->new( file => $file );
+
+=head1 Description
+
+App::Sqitch::Plan provides the interface for a Sqitch plan. This is just a
+stub class for now, it doesn't do anything yet.
+
+=head1 Interface
+
+=head2 Constructors
+
+=head3 C<new>
+
+  my $plan = App::Sqitch::Plan->new(%params);
+
+Instantiates and returns a App::Sqitch::Plan object.
+
+=head2 Accessors
+
+=head3 C<file>
+
+  my $file = $plan->file;
+
+Returns the path to the plan file. Defaults to F<./sqitch.plan>. The plan
+file may not actually exist on the file system.
+
+=head1 See Also
+
+=over
+
+=item L<sqitch>
+
+The Sqitch command-line client.
+
+=back
+
+=head1 Author
+
+David E. Wheeler <david@justatheory.com>
+
+=head1 License
 
 Copyright (c) 2012 iovation Inc.
 
@@ -46,3 +84,5 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+=cut

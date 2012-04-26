@@ -4,12 +4,14 @@ use Module::Build;
 
 Module::Build->new(
     module_name        => 'App::Sqitch',
+    release_status     => 'unstable',
     license            => 'mit',
     requires           => { perl            => '5.10.1' },
     configure_requires => { 'Module::Build' => '0.35'  },
     build_requires     => {
         'Capture::Tiny'        => '0.12',
         'Module::Build'        => '0.35',
+        'Test::Dir'            => 0,
         'Test::Exception'      => 0,
         'Test::MockModule'     => '0.05',
         'Test::More'           => '0.17',
@@ -19,14 +21,22 @@ Module::Build->new(
         'File::Spec'           => 0,
     },
     requires => {
+        'Carp'                         => 0,
+        'Config'                       => 0,
         'Config::GitLike'              => '1.07',
+        'File::Basename'               => 0,
         'File::HomeDir'                => 0,
+        'File::Path'                   => 0,
+        'File::Spec'                   => 0,
         'Getopt::Long'                 => 0,
         'Hash::Merge'                  => 0,
+        'List::Util'                   => 0,
         'Moose'                        => '1.15',
         'Moose::Util::TypeConstraints' => '1.15',
         'namespace::autoclean'         => '0.11',
         'Path::Class'                  => 0,
+        'Pod::Find'                    => 0,
+        'Pod::Usage'                   => 0,
         'Try::Tiny'                    => 0,
       },
     recommends         => {
