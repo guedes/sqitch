@@ -1,6 +1,6 @@
 =head1 Name
 
-sqitch-config - Get and set project, user, or system Sqitch options
+sqitch-config - Get and set local, user, or system Sqitch options
 
 =head1 Synopsis
 
@@ -36,10 +36,10 @@ form (simple integer for C<--int>, decimal number for C<--num>, a "true" or
 "false" string for C<--bool>) If no type specifier is passed, no checks or
 transformations are performed on the value.
 
-The C<file-option> can be one of C<--system>, C<--user> or C<--file>, which
-specify where the values will be read from or written to. The default is to
-assume the config file of the current project directory, F<./sqitch.conf>
-(see L<Files>).
+The C<file-option> can be one of C<--local>, C<--user>, C<--system>, or
+C<--file>, which specify where the values will be read from or written to. The
+default is to assume the local config file in the current project directory,
+for editing, and the all files merged for fetching (see L<Files>).
 
 =begin comment
 
@@ -99,7 +99,7 @@ matching the key (and optionally the C<value_regex>).
 =item C<--add>
 
 Adds a new line to the option without altering any existing values. This is
-the same as providing ^$ as the value_regex in C<--replace-all>.
+the same as providing C<^$> as the value_regex in C<--replace-all>.
 
 =item C<--get>
 
@@ -117,6 +117,16 @@ exactly one.
 Like C<--get-all>, but interprets the name as a regular expression and writes
 out the key names and value.
 
+=item C<--local>
+
+For writing options: write to the local F<./sqitch.conf> file. This is
+the default if no file option is specified.
+
+For reading options: read only from the local F<./sqitch.conf> file rather
+than from all available files.
+
+See also L<Files>.
+
 =item C<--user>
 
 For writing options: write to the user F<~/.sqitch/sqitch.conf> file rather
@@ -129,10 +139,10 @@ See also L<Files>.
 
 =item C<--system>
 
-For writing options: write to system-wide F<$(prefix)/etc/sqitch.conf> file
+For writing options: write to system-wide F<$(etc_path)/sqitch.conf> file
 rather than the repository F<./sqitch.conf>.
 
-For reading options: read only from system-wideF<$(prefix)/etc/sqitch.conf>
+For reading options: read only from system-wide F<$($etc_prefix)/sqitch.conf>
 file rather than from all available files.
 
 See also L<Files>.
@@ -180,8 +190,9 @@ C<--bool> or C<--int>, as described above.
 
 =item C<-e, --edit>
 
-Opens an editor to modify the specified config file; either C<--system>,
-C<--user>, or repository (default).
+Opens an editor to modify the specified config file; either C<--local>,
+C<--user>, C<--system>, or C<--file>. If none of those options is specified,
+the local file will be opened.
 
 =back
 
@@ -192,15 +203,15 @@ C<sqitch config> will search for configuration options:
 
 =over
 
-=item C<./sqitch.conf>
+=item F<./sqitch.conf>
 
-Project-specific configuration file.
+Local, project-specific configuration file.
 
-=item C<~/.sqitch/sqitch.conf>
+=item F<~/.sqitch/sqitch.conf>
 
 User-specific configuration file.
 
-=item C<$(prefix)/etc/sqitch.conf>
+=item F<$($etc_prefix)/sqitch.conf>
 
 System-wide configuration file.
 
@@ -212,8 +223,7 @@ System-wide configuration file.
 
 =item C<SQITCH_CONFIG>
 
-Take the project configuration from the given file instead of
-C<./sqitch.conf>.
+Take the local configuration from the given file instead of C<./sqitch.conf>.
 
 =item C<SQITCH_USER_CONFIG>
 
@@ -223,7 +233,7 @@ C<~/.sqitch/sqitch.conf>.
 =item C<SQITCH_SYSTEM_CONFIG>
 
 Take the system configuration from the given file instead of
-C<$(prefix)/etc/sqitch.conf>.
+C<$($etc_prefix)/sqitch.conf>.
 
 =back
 
@@ -306,11 +316,12 @@ To add a new setting without altering any of the existing ones, use:
 =head1 Configuration File
 
 The sqitch configuration file contains a number of variables that affect the
-sqitch command's behavior. The F<./sqitch.conf> file in each project is used
-to store the configuration for that project, and F<$HOME/.sqitch/sqitch.conf>
-is used to store a per-user configuration as fallback values for the
-F<./sqitch.conf> file. The file F<$(prefix>/etc/sqitch.conf> can be used to
-store a system-wide default configuration.
+sqitch command's behavior. The F<./sqitch.conf> file local to each project is
+used to store the configuration for that project, and
+F<$HOME/.sqitch/sqitch.conf> is used to store a per-user configuration as
+fallback values for the F<./sqitch.conf> file. The file
+F<$($etc_prefix)/sqitch.conf> can be used to store a system-wide default
+configuration.
 
 The variables are divided into sections, wherein the fully qualified variable
 name of the variable itself is the last dot-separated segment and the section
@@ -381,9 +392,11 @@ Some variables may require a special value format.
   # Core variables
   [core]
       engine    = pg
-      db        = widgetopolis
-      sql_dir   = migrations
+      top_dir   = migrations
       extension = ddl
+
+  [core "pg"]
+      db_name   = widgetopolis
 
   [revert]
       to        = gamma
@@ -399,7 +412,197 @@ Note that this list is not comprehensive and not necessarily complete. For
 command-specific variables, you will find a more detailed description in the
 appropriate manual page.
 
-XXX Fill these out.
+=over
+
+=item C<core.plan_file>
+
+The plan file to use. Defaults to F<$top_dir/sqitch.plan>.
+
+=item C<core.engine>
+
+The database engine to use. Supported engines include:
+
+=over
+
+=item * C<pg> - L<PostgreSQL|http://postgresql.org/>
+
+=item * C<mysql> - L<MySQL|http://mysql.com/>
+
+=item * C<sqlite> - L<SQLite|http://sqlite.org/>
+
+=back
+
+=item C<core.top_dir>
+
+Path to directory containing deployment, reversion, and test SQL scripts. It
+should contain subdirectories named C<deploy>, C<revert>, and (optionally)
+C<test>. These may be overridden by C<deploy_dir>, C<revert_dir>, and
+C<test_dir>. Defaults to C<./sql>.
+
+=item C<core.deploy_dir>
+
+Path to a directory containing SQL deployment scripts. Overrides the value
+implied by C<core.top_dir>.
+
+=item C<core.revert_dir>
+
+Path to a directory containing SQL reversion scripts. Overrides the value
+implied by C<core.top_dir>.
+
+=item C<core.test_dir>
+
+Path to a directory containing SQL test scripts. Overrides the value implied
+by C<core.top_dir>.
+
+=item C<core.extension>
+
+The file name extension on deployment, reversion, and test SQL scripts.
+Defaults to C<sql>.
+
+=item C<core.verbosity>
+
+An integer determining how verbose Sqitch should be. Defaults to 1. Set to 0
+to silence status messages and to 2 or three to increase verbosity. Error
+message output will not be affected by this property.
+
+=back
+
+=head3 C<user>
+
+Configuration properties that identify the user.
+
+=over
+
+=item C<user.name>
+
+Your full name, to be recorded in changes and tags added to the plan,
+and to to commits to the database.
+
+=item C<user.email>
+
+Your email address, to be recorded in changes and tags added to the plan, and
+to to commits to the database.
+
+=back
+
+=head3 C<core.pg>
+
+Configuration properties for the PostgreSQL engine.
+
+=over
+
+=item C<core.pg.client>
+
+Path to the C<psql> command-line client. Defaults to the first instance
+found in the path.
+
+=item C<core.pg.username>
+
+User name to use when connecting to the PostgreSQL database. Defaults to the
+contents of the C<$PGUSER> environment variable or to the current system user
+name.
+
+=item C<core.pg.password>
+
+Password to use when connecting to the PostgreSQL database. Defaults to the
+contents of the C<$PGPASSWORD> environment variable or to the relevant line in
+F<~/.pgpass>, if available.
+
+=item C<core.pg.db_name>
+
+Name of the PostgreSQL database. Defaults to the same as C<--db-user> or to
+the contents of the C<PGDATABASE> environment variable.
+
+=item C<core.pg.host>
+
+Host name to use when connecting to the database. Defaults to the contents of
+the C<$PGHOST> environment variable.
+
+=item C<core.pg.port>
+
+Port number to connect to. Does not apply to all engines. Defaults to the
+contents of the C<$PGPORT> environment variable.
+
+=item C<core.pg.sqitch_schema>
+
+The name of the schema in which Sqitch metadata will be stored. No other data
+should be stored in this schema. Defaults to C<sqitch>.
+
+=back
+
+=head3 C<core.mysql>
+
+Configuration properties for the MySQL engine. All except C<client> can also
+be set via the L<MySQL options
+file|http://dev.mysql.com/doc/refman/5.6/en/option-files.html>
+
+=over
+
+=item C<core.mysql.client>
+
+Path to the C<mysql> command-line client. Defaults to the first instance found
+in the path.
+
+=item C<core.mysql.username>
+
+User name to use when connecting to the MySQL database.
+
+=item C<core.mysql.password>
+
+Password to use when connecting to the MySQL database.
+
+=item C<core.mysql.db_name>
+
+Name of the MySQL database.
+
+=item C<core.mysql.host>
+
+Host name to use when connecting to the database.
+
+=item C<core.mysql.port>
+
+Port number to connect to. Does not apply to all engines.
+
+=item C<core.mysql.sqitch_prefix>
+
+Prefix to use for Sqitch metadata tables. Defaults to C<sqitch>.
+
+=back
+
+=head3 C<core.sqlite>
+
+Configuration properties for the SQLite engine.
+
+=over
+
+=item C<core.sqlite.client>
+
+Path to the C<sqlite3> command-line client. Defaults to the first instance
+found in the path.
+
+=item C<core.sqlite.db_name>
+
+Path to the SQLite database file.
+
+=item C<core.sqlite.sqitch_prefix>
+
+Prefix to use for Sqitch metadata tables. Defaults to C<sqitch>.
+
+=back
+
+=head3 C<user>
+
+=over
+
+=item C<user.email>
+
+Your email address to be recorded in any newly planned changes.
+
+=item C<user.name>
+
+Your full name to be recorded in any newly planned changes.
+
+=back
 
 =head1 Sqitch
 

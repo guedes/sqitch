@@ -1,8 +1,403 @@
 Revision history for Perl extension App::Sqitch
 
-0.11
+0.932
+
+0.931 2012-09-25T19:09:14Z
+     - Now properly require Text::LocaleDomain 1.20.
+     - Stubbed out French and German localization files. Translators wanted!
+     - Added LocaleTextDomain dzil support (no impact on distribution).
+     - Fix "List form of pipe open not implemented" bug on Windows by using
+       Win32::ShellQuote to quote commands.
+
+0.93  2012-08-31T22:29:41Z
+     - Added forward and reverse change references. Append ^ to a change
+       reference to mean the change before, or ~ to mean the change following.
+       Use ~~ and ^^ to select two changes forward and back, and ~n and ^n,
+       where n is an integer, to select that number of changes forward or
+       back. Idea stolen from Git, though the meanings of the characters are
+       different.
+     - Added the @FIRST and @LAST symbolic references to refer to the first
+       and last changes deployed to the database, respectively. These vary
+       from the existing @ROOT and @HEAD symbolic references, which refer to
+       the first and last changes listed in the plan.
+     - Updated the tutorial to use the new symbolic references and ^ and ~
+       qualifiers where appropriate.
+     - The messages output by the `deploy` and `revert` commands now show the
+       resolved name of the `--to` target, rather than the value passed to
+       `--to`. This is most useful when using a symbolic reference, so you
+       can see what you're actually deploying or reverting to.
+
+0.922 2012-08-30T17:41:59Z
+     - Loosened constraint to disallow only `/[~^/=%]/` before digits at the
+       end of name. This allows, for example, a tag to be named "v1.2-1".
+     - Added the `bundle` command to the documentation displayed by `sqitch
+       help`.
+     - Updated the mention of the `bundle` command in the main `sqitch`
+       documentation.
+
+0.921 2012-08-30T00:09:56Z
+     - Made Win32::Locale required only on Windows.
+     - Fixed some module minimum version requirements so that dependencies
+       will be properly listed in `Build.PL`.
+
+0.92  2012-08-28T23:14:37Z
+     - Added the `bundle` command.
+     - Attempts to deploy a project with a different name or URI than
+       previously registered now throws an exception.
+     - Added UNIQUE constraint to `projects.uri` in the PostgreSQL Sqitch
+       schema.
+     - Added ON UPDATE actions to foreign key constraints in the PostgreSQL
+       Sqitch schema.
+
+0.913  2012-08-28T17:31:29Z
+     - Fixed oversight in test that still relied on `$ENV{USER}` instead of
+       `Sqitch->sysuser`,
+
+0.912 2012-08-27T21:23:19Z
+     - Fall back on `Sqitch->sysuser` when looking for the PostgreSQL user,
+       rather than just `$ENV{USER}`. The method does a lot more work to find
+       the system user name. This will hopefully also fix test failures on
+       systems where `$ENV{USER}` is not set.
+     - Use Win32::Locale to set the locale on DateTime objects on Windows.
+
+0.911 2012-08-23T19:19:17Z
+     - Fixed more platform-specific test failures in `t/base.t`.
+     - Increased liklihood of finding a user's full name on Windows. Thanks to
+       H. Merijn Brand for testing.
+
+0.91  2012-08-23T00:37:36Z
+     - Moved `requires` and `conflicts` array columns from the `changes` table
+       to an new table, `dependencies`, where there is just one per row.
+     - Requirements are now checked before reverting a change. If the change
+       is depended on by other changes, it will not be reverted (Issue #36).
+     - Fixed bug where the `status` command would show changes and/or tags
+       from other projects when `--show-tags` or `--show-changes` were used.
+     - Fixed test failures on Windows.
+     - Added more ways to look up the current username to minimize the chances
+       that none is found.
+     - Added Windows-specific way of finding the current user's full name,
+       since the existing approach died on Windows.
+     - Windows-specific modules are no longer required, but are recommended on
+       Windows. They will be listed by `./Build` and added to the "recommends"
+       section of the the generated `MYMETA.*` files on Windows.
+     - Fixed a bug where dependencies on other projects would be rejected
+       in calls to `add` and `rework`.
+
+0.902 2012-08-20T21:14:08Z
+     - Fixed another occasional test failure due to a clock tick in `t/pg.t.`
+     - Fixed test failures in `t/status.t` on systems without DBD::Pg.
+
+0.901 2012-08-20T19:31:03Z
+     - Fix test failure in `t/status.t` caused by failing to ignore a
+       pre-existing `~/.sqitch/sqitch.conf` configuration file.
+     - Eliminated "Use of uninitialized value in length" warnings.
+
+0.90  2012-08-18T00:05:41Z
+     - Added `dist/sqitch.spec`. This file was created to generate an RPM for
+       CentOS 6.1.
+     - Added `dist/sqitch-pg.spec` to use for creating RPMs for Sqitch with
+       PostgreSQL support.
+     - Fixed an occasional test failure due to a clock tick in `t/pg.t.`
+     - Switched to Dist::Zilla for creating the distribution. For end-users,
+       this just means that `Build.PL` is now a generated file.
+     - Required module versions are now declared in code. This is so that they
+       are enforced at runtime, and also so that they will be picked up by
+       Dist::Zilla for inclusion in the generated `Build.PL` and `META` files.x
+     - Added support for declaring dependencies (required and conflicting
+       changes) from other Sqitch projects. This allows one project to depend
+       on changes from another. The syntax is `--requires $projname:$change`.
+       This use of the colon required a few changes to the Plan syntax:
+       + Pragmas may now appear only in the first "header" section of the
+         plan, separated from the changes in the "body" of the plan by a blank
+         line.
+       + Required dependencies no longer begin with ":". Conflicts still must
+         begin with "!".
+       + Object names may no longer contain ":", as it is used for project
+         specification.
+       + Project-qualified dependencies are supported by the project name
+         appearing before the change name, separated by a colon.
+     - Added App::Sqitch::Plan::Depend, an object to parse, represent, and
+       serialize dependencies.
+     - The plan parser does not validate changes required from other projects,
+       as it has no access to the plans from those projects.
+     - The engine interface validates cross-project dependencies before
+       deploying changes.
+     - Project data is not included in the Sqitch metadata tables in the
+       database. There is a table for all known projects, as well as foreign
+       key references in the `changes`, `tags`, and `events` tables.
+     - Project information is now displayed in the output of `sqitch status`
+       and `sqitch log` (in some formats).
+     - Added `--project` option to `sqitch status` to identify the project for
+       which to display the status. Defaults to the current project, if there
+       is one, or to the project in the database, if there is only one
+       registered project.
+     - Added `--project` option to `sqitch log` to allow searching for events
+       from projects matching a regular expression.
+     - Now require Config::GitLike 1.09 for its improved character encoding
+       support.
+     - Dependencies can now be declared as SHA1 hash IDs, including for IDs
+       from other projects.
+     - Fixed change and tag name validation to count "_" as a non-punctuation
+       character, and therefore able to be used at the beginning or end of
+       names.
+     - Replaced the `appuser` change in `sqitchtutorial` with `appschema`.
+       This simplifies things, since users are global objects in PostgreSQL,
+       while schemas are not. As a result, a bunch of irrelevant code was
+       removed from the tutorial.
+
+0.82  2012-08-03T21:25:27Z
+     - Now require Moose 2.0300, since MooseX::Role::Parameterized, which
+       requires Role::HasMessage, requires it, anyway,
+     - Fixed test failure in `t/pg.t` when running on Test::More 0.94.
+     - Require POSIX in `t/datetime.t` to fix test failure with CentOS 6
+       Perl. Not sure why it did not fail anywhere else, but it's harmless
+       enough to make sure it's loaded early.
+
+0.81  2012-08-03T11:34:46Z
+     - Removed wayward `/l` from a regular expression, which breaks Perls
+       earlier than 5.14, and is not needed anyway.
+     - Fixed error in `log` that caused invalid output on Perls earlier than
+       5.14. Seems that `return` is required for `when` statements meant to
+       return a value, and postfix `when` is not supported in Perl 5.10.
+
+0.80  2012-08-01T21:54:00Z
+     - Added the `log` command to `sqitchcommands.pod`, which is shown as the
+       output of `sqitch help`.
+     - Added  `user.name` and `user.email` configuration variables.
+     - Now using `user.name` and `user.email`, rather than the system or
+       database user name, to log the user committing changes to a database.
+     - Database-specific options are now prefixed with `--db-`.
+     - Added "raw" format to App::Sqitch::DateTime. It is ISO-8601 format in
+       UTC.
+     - Modified the "raw" log format to use the raw DateTime format.
+     - Added timestamp and planner info to the plan. This is additional
+       metadata included in every change and tag: The planner's name and email
+       address and the current timestamp. This makes it easier to audit who
+       added changes to a plan and when.
+     - Added the `--note` option to the `add`, `rework`, and `tag` commands.
+     - For consistency throughout, renamed all attributes and options from
+       "message" and "comment" to "note", which is shorter and better reflects
+       their purpose.
+     - The planner's name and email address, as well as the plan time and
+       note, are now stored in the database whenever changes or tags are
+       committed and logged.
+     - Renamed various database columns to be more consistent, with the terms
+       "commit", "plan", and "note".
+     - Added `requires` and `conflicts` columns to the events table, so that
+       they can become available to the `log` command.
+     - Various `log` format changes:
+       * Renamed %n (newline) to %v (vertical space)
+       * Renamed %c to %n (change name)
+       * Replaced %a (committer name) with %c (committer info). It takes an
+         optional argument:
+         + "name" or "n" for committer name
+         + "email" or "e" for committer email
+         + "d" or "date" for commit date
+         + "d:$format" or "date:$format" for formatted commit date
+       * Added %p (planner info). It takes an optional argument just like
+         "%c" does:
+         + "name" or "n" for planner name
+         + "email" or "e" for planner email
+         + "d" or "date" for plan date
+         + "d:$format" or "date:$format" for formatted plan date
+       * Added special argument to "%C", `:event", which returns a color based
+         on the value of the event type:
+         + Green for "deploy"
+         + Blue for "revert"
+         + Red for "fail"
+       * Added "%r" and "%R" for lists of required changes.
+       * Added "%x" and "%X" for lists of conflicting changes.
+       * Added "%a" to display an unlocalized attribute name and value.
+       * Added "planner", "committer", "planned", and "email" arguments to %_.
+       * Documented that the dates can take CLDR or strftime formats, too.
+       * Added the %s, %b, and %B format for "subject", "body", and raw body
+         akin to Git. The values are taken from the note value, if available.
+       * Added committer email addresses to default formats.
+       * Added plan data to default formats.
+       * Added note data to default formats.
+       * Added lists of required and conflicting changes to the "raw" and
+         "full" formats.
+       * Switched to event-driven colors for event types and change IDs in
+         default formats.
+       * Added color to the event type and change ID output in the "raw"
+         format.
+    - Added detailed descriptions of the default formats to `sqitch-log.pod`.
+    - Updated the Change object to encode and decode vertical whitespace in a
+      note, so that all data remains on a single line for each object in the
+      plan file.
+    - Now require a note when adding, reworking, or tagging a change. If
+      `--note` is not specified, an editor will be launched and the user
+      prompted to write a note. This is similar to how `git commit` behaves,
+      and encourages documentation of changes.
+    - Added required "project" and optional "uri" pragmas to the plan.
+    - Added `--project` and `--uri` attributes to the `init` command.
+    - Removed the `core.uri` configuration variable and corresponding core
+      `--uri` option (since it has been replaced with the `init` command's
+      `--uri` option.
+    - Command-line arguments are now all assumed to be UTF-8, and are parsed
+      as such.
+    - Added workaround to force the configuration file to be written and read
+      as UTF-8. Requires an unreleased version of Config::GitLike to actually
+      work properly.
+    - Text passed to a pager (as when running `sqitch log`) is now encoded in
+      UTF-8.
+    - Fixed `--quiet` option so that it properly trumps `--verbose`.
+
+0.71  2012-07-12T15:30:27Z
+     - Updated the example `sqitch log` output in `sqitchtutorial`.
+     - Changed the terms "actor", "agent" to "committer" throughout the API
+       and output.
+     - Renamed the `events` table columns from `logged_at` and `logged_by` to
+       `committed_at` and `committed_by`.
+
+0.70  2012-07-12T13:24:13Z
+     - Changed the `current_changes()` and `current_tags()` Engine methods so
+       that they return iterator code references instead of lists.
+     - Added the `search_events()` Engine method, to search the event log.
+     - Added the `pager` attribute and `page()` methods to App::Sqitch.
+     - Added support for `strftime:` and `cldr:` options to the `status`
+       command's `--date-format` option.
+     - Added the `log` command.
+     - Added the `strftime:$string` and `cldr:$string` options to
+       `--date-format` in the `status` and `log` commands.
+
+0.60  2012-07-07T11:12:26Z
+     - Removed some discussion of VCS integration, since it is not yet
+       implemented, and it may be a while before it is.
+     - Added `sqitchcommands`, documentation of the most common Sqitch
+       commands, and fixed `--help` to show it.
+     - Fixed `--man` to show the sqitch command documentation.
+     - Fixed error handling for unknown commands, so that it displays a
+       message saying the command is unknown, rather than a stack trace.
+     - Adding a change after a tag now also inserts a blank line into the plan
+       between the tag and the new change, for nicer plan file formatting.
+     - Added the `status` command.
+     - Added App::Sqitch::DateTime, a DateTime subclass with named formats.
+
+0.51  2012-07-04T18:34:07Z
+     - Added Role::HasMessage to the list or requirements in `Build.PL`. Was
+       an oversight that it was omitted in v0.50.
+     - Removed the `--dry-run` option. It was completely ignored. Maybe it
+       will return someday.
+     - Removed `fail()`, `bail()`, `unfound()`, and `help()`. It's better for
+       commands not to exit, so have them throw exceptions in the appropriate
+       places, instead.
+     - Replaced all uses of Carp and non-exception handling uses of `die` with
+       our own localized exceptions.
+     - Localized all output and exception messages.
+
+0.50  2012-07-03T19:55:20Z
+     - Require a plan file.
+     - Renamed "steps" to "changes".
+     - New plan file spec.
+       + Tags are just labels on a particular change, no longer a list of
+         changes.
+       + Dependencies now specified in the plan file, not in the deploy
+         script.
+       + Changes can be specified as deploys or reverts, though reverts
+         are not currently supported.
+       + Changes can be specified with an optional leading `+` for deploy or
+         `-` for revert, which will eventually be important for conflict
+         management.
+       + Dependencies can be specified as other change names, tags, or a
+         change as of a tag (e.g., `foo@beta`).
+       + Pragmas can be specified with a leading `%`. Only `%syntax-version`
+         is currently recognized; all others are ignored.
+     - Renamed the `add-step` command to just `add`.
+     - Added the `tag` command.
+     - Added the `revert` command.
+     - Added the `rework` command.
+     - Added exception objects and started using them.
+     - Added localization support and started using it.
+     - Added IDs to changes and tags. These are SHA1s generated from the return
+       value of the new `info` method, which describes the change or tag.
+     - Updated the PostgreSQL engine to comply with the new Engine API.
+     - Updated the PostgreSQL engine to use IDs for tracking changes and tags.
+     - Eliminated the term "node" from the plan implementation and docs.
+     - Updated the engine base class for the new plan API, and to just deploy
+       changes one-at-a-time.
+     - Added many new ways to look for changes in the plan, including:
+       + `change_name`
+       + `@tag_name`
+       + `change_name@tag_name`
+       + `change_id`
+       + `tag_id`
+     - The plan file can now be written out with nearly all white space and
+       comments preserved.
+     - Changed the `add` command to write out the plan file after a new change
+       is added.
+     - Change names can now be duplicated, as long as a tag name appears
+       between them.
+     - Renamed `target` to destination in Engine.
+     - Started referring to the change to deploy or revert to in docs as the
+       "target".
+     - PostgreSQL errors will now be thrown as Sqitch exceptions, for proper
+       handling during command execution.
+     - Added required `core.uri` configuration setting. Used to keep change
+       IDs unique across projects.
+     - Added `--mode` option to `deploy`, to trigger reverts on failure to
+       either:
+       + Not at all: keep the latest successful change.
+       + To the last deployed tag
+       + To the point at which the current deploy started
+     - Added the implicit tags `@ROOT` and `@HEAD` for looking up changes in
+       the plan.
+     - Renamed `sql_dir` to `top_dir` and made it default to the current
+       directory.
+     - Changed the location of the plan file to the top directory. This will
+       make it easier to have plans and scripts for multiple database
+       platforms in a single project.
+     - Fixed a bug in the build process so that template files will be
+       properly written to the `etc` directory.
+     - Rewrote `sqitchtutorial` to reflect the new realities.
+     - Updated `sqitch` documentation, and moved the plan file information to
+       App::Sqitch::Plan.
+
+0.31  2012-05-21T22:29:42Z
+     - Fixed some typos and failing tests.
+
+0.30  2012-05-18T15:43:12Z
+     - The `init` command now properly writes out the `[core]` section header
+       when there are only commented core settings.
+     - The `--requires` and `--conflicts` options to `add` now work
+       properly.
+     - Fixed anticipated Win32 test failures in `t/init.t`.'
+     - Fixed the `--plan-file`, `--top-dir`, and other directory options so
+       that they no longer throw errors, but actually work.
+     - Implemented the plan parser. It's designed to later be subclassed to
+       support VCS integration. Includes dependency parsing and sorting.
+     - Switched to IPC::System::Simple instead for system/capture code.
+     - Implemented Engine interface for deploying and reverting tags.
+     - Implemented PostgreSQL engine. It uses a lock to ensure that only one
+       deployment can run at any time.
+     - Added the `deploy` command. it is now possible to deploy to a
+       PostgreSQL database.
+
+0.20  2012-05-01T02:48:47Z
+     - Added `--local` option to `sqitch config`.
+     - Renamed `project_file()` to `--local_file()` in App::Sqitch::Config.
+     - `sqitch init` now writes core and engine config settings with default
+       values to the configuration file. This makes it easier for folks to get
+       started editing it.
+     - Implemented `add` command. Includes support for system-wide or
+       use-specific templates using Template::Tiny.
+     - Added `etc` directory with default templates. This is installed into
+       `$Config{prefix}/etc/skitch`, unless built with `--prefix` or
+       `--install_base`, in which case it will simply be installed into `etc`
+       in that directory.
+     - Added `--etc-path`, so that one can know where the system-wide
+       configuration and templates are to be found.
+
+0.11  2012-04-27T06:44:54Z
+     - Implemented `init` command.
+     - Started sketching out the engine interface, with preliminary PostgreSQL
+       and SQLite implementations.
+     - Require Perl v5.10.1 (did before, but in the wrong place, so it was
+       ignored).
+     - Fixed test failures on different verions of Moose.
+     - Fixed test failure on Perl 5.12.
 
 0.10  2012-04-25T20:46:59Z
       - Initial unstable release.
       - Implemented `help` command.
-      - Impelemented `config` command, very similar to `git-config`.
+      - Implemented `config` command, very similar to `git-config`.

@@ -1,0 +1,79 @@
+=head1 Name
+
+sqitch-deploy - Deploy changes to a database
+
+=head1 Synopsis
+
+  sqitch [options] deploy
+  sqitch [options] deploy <target>
+  sqitch [options] deploy --to-target <target>
+
+=head1 Description
+
+Deploy changes to the database. Changes will begin from the current deployment
+state. They will run to the latest change, unless a target is specified, either
+via C<--to> or with no option flag, in which case changes will be deployed
+up-to and including that target.
+
+If the database it up-to-date or already deployed to the specified target, no
+changes will be made. If the target appears earlier in the plan than the
+currently-deployed state, an error will be returned, along with a suggestion
+to instead use L<sqitch-revert>.
+
+=head1 Options
+
+=over
+
+=item C<--to-target>
+
+=item C<--target>
+
+=item C<--to>
+
+Specify the deployment target. Defaults to the last point in the plan. See
+L<sqitchchanges> for the various ways in which change targets can be
+specified.
+
+=item C<--mode>
+
+Specify the reversion mode to use in case of failure. Possible values are:
+
+=over
+
+=item C<all>
+
+In the event of failure, revert all deployed changes, back to the point at
+which deployment started. This is the default.
+
+=item C<tag>
+
+In the event of failure, revert all deployed changes to the last
+successfully-applied tag. If no tags were applied during this deployment, all
+changes will be reverted to the pint at which deployment began.
+
+=item C<change>
+
+In the event of failure, no changes will be reverted. This is on the
+assumption that a change failure is total, and the change may be applied again.
+
+=back
+
+=back
+
+=head1 Configuration Variables
+
+=over
+
+=item C<deploy.to_target>
+
+Target to deploy to. You probably don't want to set this.
+
+=item C<deploy.mode>
+
+Deploy mode. The supported values are the same as for the C<--mode> option.
+
+=back
+
+=head1 Sqitch
+
+Part of the L<sqitch> suite.

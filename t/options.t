@@ -3,10 +3,10 @@
 use strict;
 use warnings;
 use utf8;
-use Test::More tests => 20;
+use Test::More tests => 25;
 #use Test::More 'no_plan';
 use Test::MockModule;
-use Capture::Tiny ':all';
+use Capture::Tiny 0.12 ':all';
 
 my $CLASS;
 
@@ -75,47 +75,55 @@ HELP: {
     my @args;
     $mock->mock(_pod2usage => sub { @args = @_} );
     ok $CLASS->_parse_core_opts(['--help']), 'Ask for help';
-    is_deeply \@args, [ $CLASS, '-exitval', 0 ], 'Should have been helped';
+    is_deeply \@args, [ $CLASS, 'sqitchcommands', '-exitval', 0, '-verbose', 2 ],
+        'Should have been helped';
     ok $CLASS->_parse_core_opts(['--man']), 'Ask for man';
-    is_deeply \@args, [ $CLASS, '-exitval', 0, '-verbose', 2 ],
+    is_deeply \@args, [ $CLASS, 'sqitch', '-exitval', 0, '-verbose', 2 ],
         'Should have been manned';
 }
 
 ##############################################################################
 # Try lots of options.
-is_deeply $CLASS->_parse_core_opts([
+my $opts = $CLASS->_parse_core_opts([
     '--plan-file'  => 'plan.txt',
     '--engine'     => 'pg',
-    '--client'     => 'psql',
+    '--db-client'  => 'psql',
     '--db-name'    => 'try',
-    '--username'   => 'bob',
-    '--host'       => 'local',
-    '--port'       => 2020,
-    '--sql-dir'    => 'ddl',
+    '--db-user'    => 'bob',
+    '--db-host'    => 'local',
+    '--db-port'    => 2020,
+    '--top-dir'    => 'ddl',
     '--deploy-dir' => 'dep',
     '--revert-dir' => 'rev',
     '--test-dir'   => 'tst',
     '--extension'  => 'ext',
-    '--dry-run',
     '--verbose', '--verbose',
-    '--quiet'
-]), {
-    'plan_file'  => 'plan.txt',
-    'engine'     => 'pg',
-    'client'     => 'psql',
-    'db_name'    => 'try',
-    'username'   => 'bob',
-    'host'       => 'local',
-    'port'       => 2020,
-    'sql_dir'    => 'ddl',
-    'deploy_dir' => 'dep',
-    'revert_dir' => 'rev',
-    'test_dir'   => 'tst',
-    'extension'  => 'ext',
-    'dry_run'    => 1,
-    verbosity    => 2,
-    quiet        => 1,
+]);
+
+is_deeply $opts, {
+    'plan_file'   => 'plan.txt',
+    'engine'      => 'pg',
+    'db_client'   => 'psql',
+    'db_name'     => 'try',
+    'db_username' => 'bob',
+    'db_host'     => 'local',
+    'db_port'     => 2020,
+    'top_dir'     => 'ddl',
+    'deploy_dir'  => 'dep',
+    'revert_dir'  => 'rev',
+    'test_dir'    => 'tst',
+    'extension'   => 'ext',
+    verbosity     => 2,
 }, 'Should parse lots of options';
+
+for my $dir (qw(top_dir deploy_dir revert_dir test_dir)) {
+    isa_ok $opts->{$dir}, 'Path::Class::Dir', $dir;
+}
+
+# Make sure --quiet trumps --verbose.
+is_deeply $CLASS->_parse_core_opts([
+    '--verbose', '--verbose', '--quiet'
+]), { verbosity => 0 }, '--quiet should trump verbosity.';
 
 ##############################################################################
 # Try short options.
@@ -123,19 +131,20 @@ is_deeply $CLASS->_parse_core_opts([
   '-d' => 'mydb',
   '-u' => 'fred',
 ]), {
-    db_name  => 'mydb',
-    username => 'fred',
+    db_name     => 'mydb',
+    db_username => 'fred',
 }, 'Short options should work';
 
 USAGE: {
     my $mock = Test::MockModule->new('Pod::Usage');
-    my @args;
-    $mock->mock(pod2usage => sub { @args = @_} );
-    ok $CLASS->_pod2usage('hello'), 'Run _pod2usage';
-    is_deeply \@args, [
-        '-verbose'  => 99,
-        '-sections' => '(?i:(Synopsis|Usage|Options))',
+    my %args;
+    $mock->mock(pod2usage => sub { %args = @_} );
+    ok $CLASS->_pod2usage('sqitch-add', foo => 'bar'), 'Run _pod2usage';
+    is_deeply \%args, {
+        '-sections' => '(?i:(Usage|Synopsis|Options))',
+        '-verbose'  => 2,
+        '-input'    => Pod::Find::pod_where({'-inc' => 1 }, 'sqitch-add'),
         '-exitval'  => 2,
-        'hello'
-    ], 'Proper args should have been passed to Pod::Usage';
+        'foo'       => 'bar',
+    }, 'Proper args should have been passed to Pod::Usage';
 }

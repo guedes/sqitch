@@ -1,6 +1,6 @@
 package App::Sqitch::Engine::sqlite;
 
-use v5.10;
+use v5.10.1;
 use strict;
 use warnings;
 use utf8;
@@ -8,6 +8,52 @@ use namespace::autoclean;
 use Moose;
 
 extends 'App::Sqitch::Engine';
+
+our $VERSION = '0.932';
+
+has client => (
+    is       => 'ro',
+    isa      => 'Str',
+    lazy     => 1,
+    required => 1,
+    default  => sub {
+        my $sqitch = shift->sqitch;
+        $sqitch->db_client
+            || $sqitch->config->get( key => 'core.sqlite.client' )
+            || 'sqlite3' . ( $^O eq 'Win32' ? '.exe' : '' );
+    },
+);
+
+has db_name => (
+    is       => 'ro',
+    isa      => 'Str',
+    lazy     => 1,
+    required => 1,
+    default  => sub {
+        my $sqitch = shift->sqitch;
+        $sqitch->db_name
+            || $sqitch->config->get( key => 'core.sqlite.db_name' );
+    },
+);
+
+has sqitch_prefix => (
+    is       => 'ro',
+    isa      => 'Str',
+    lazy     => 1,
+    required => 1,
+    default  => sub {
+        shift->sqitch->config->get( key => 'core.sqlite.sqitch_prefix' )
+            || 'sqitch';
+    },
+);
+
+sub config_vars {
+    return (
+        client        => 'any',
+        db_name       => 'any',
+        sqitch_prefix => 'any',
+    );
+}
 
 __PACKAGE__->meta->make_immutable;
 no Moose;
@@ -25,6 +71,41 @@ App::Sqitch::Engine::sqlite - Sqitch SQLite Engine
 =head1 Description
 
 App::Sqitch::Engine::sqlite provides the SQLite storage engine for Sqitch.
+
+=head1 Interface
+
+=head3 Class Methods
+
+=head3 C<config_vars>
+
+  my %vars = App::Sqitch::Engine::sqlite->config_vars;
+
+Returns a hash of names and types to use for variables in the C<core.sqlite>
+section of the a Sqitch configuration file. The variables and their types are:
+
+  client        => 'any'
+  db_name       => 'any'
+  sqitch_prefix => 'any'
+
+=head2 Accessors
+
+=head3 C<client>
+
+Returns the path to the SQLite client. If C<--db-client> was passed to
+L<sqitch>, that's what will be returned. Otherwise, it uses the
+C<core.sqlite.client> configuration value, or else defaults to C<sqlite3> (or
+C<sqlite3.exe> on Windows), which should work if it's in your path.
+
+=head3 C<db_name>
+
+Returns the name of the database file. If C<--db-name> was passed to L<sqitch>
+that's what will be returned.
+
+=head3 C<sqitch_prefix>
+
+Returns the prefix to use for the Sqitch metadata tables. Returns the value of
+the L<core.sqlite.sqitch_prefix> configuration value, or else defaults to
+"sqitch".
 
 =head1 Author
 

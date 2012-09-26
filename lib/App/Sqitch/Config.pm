@@ -1,55 +1,68 @@
 package App::Sqitch::Config;
 
-use v5.10;
+use v5.10.1;
 use Moose;
 use strict;
 use warnings;
-use Config;
 use Path::Class;
-use Carp;
+use Locale::TextDomain qw(App-Sqitch);
+use App::Sqitch::X qw(hurl);
+use Config::GitLike 1.09;
 use utf8;
 
 extends 'Config::GitLike';
 
-our $VERSION = '0.11';
+our $VERSION = '0.932';
 
-has '+confname' => (
-    default => 'sqitch.conf',
-);
+has '+confname' => ( default => 'sqitch.conf' );
+has '+encoding' => ( default => 'UTF-8' );
+
+my $SYSTEM_DIR = undef;
+
+sub user_dir {
+    require File::HomeDir;
+    my $hd = File::HomeDir->my_home or hurl config => __(
+        "Could not determine home directory"
+    );
+    return dir $hd, '.sqitch';
+}
+
+sub system_dir {
+    dir $SYSTEM_DIR || do {
+        require Config;
+        $Config::Config{prefix}, 'etc', 'sqitch';
+    };
+}
 
 sub system_file {
-    return $ENV{SQITCH_SYSTEM_CONFIG} || file(
-        $Config{prefix}, 'etc', shift->confname
-    );
+    my $self = shift;
+    return file $ENV{SQITCH_SYSTEM_CONFIG}
+        || $self->system_dir->file( $self->confname );
 }
 
 sub global_file { shift->system_file }
 
 sub user_file {
-    return $ENV{SQITCH_USER_CONFIG} if $ENV{SQITCH_USER_CONFIG};
-
-    require File::HomeDir;
-    my $hd = File::HomeDir->my_home or croak(
-        "Could not determine home directory"
-    );
-    return file $hd, '.sqitch', shift->confname;
+    my $self = shift;
+    return file $ENV{SQITCH_USER_CONFIG}
+        || $self->user_dir->file( $self->confname );
 }
 
-sub project_file {
-    return $ENV{SQITCH_CONFIG} if $ENV{SQITCH_CONFIG};
-    return file +File::Spec->curdir, shift->confname;
+sub local_file {
+    return file $ENV{SQITCH_CONFIG} if $ENV{SQITCH_CONFIG};
+    return file shift->confname;
 }
 
-sub dir_file { shift->project_file }
+sub dir_file { shift->local_file }
 
 sub get_section {
-    my ($self, %p) = @_;
+    my ( $self, %p ) = @_;
     $self->load unless $self->is_loaded;
     my $section = $p{section} // '';
     my $data    = $self->data;
     return {
-        map  { $_ => $data->{"$section.$_"} }
-        grep { s{^\Q$section.\E([^.]+)$}{$1} } keys %{ $data }
+        map { $_ => $data->{"$section.$_"} }
+        grep { s{^\Q$section.\E([^.]+)$}{$1} } keys %{$data}
     };
 }
 
@@ -79,11 +92,20 @@ module.
 
 Returns the configuration file base name, which is F<sqitch.conf>.
 
+=head3 C<system_dir>
+
+Returns the path to the system configuration directory, which is
+C<$Config{prefix}/etc/sqitch/>.
+
+=head3 C<user_dir>
+
+Returns the path to the user configuration directory, which is F<~/.sqitch/>.
+
 =head3 C<system_file>
 
 Returns the path to the system configuration file. The value returned will be
 the contents of the C<$SQITCH_SYSTEM_CONFIG> environment variable, if it's
-defined, or else C<$Config{prefix}/etc/sqitch.conf>.
+defined, or else C<$Config{prefix}/etc/sqitch/sqitch.conf>.
 
 =head3 C<global_file>
 
@@ -95,15 +117,15 @@ Returns the path to the user configuration file. The value returned will be
 the contents of the C<$SQITCH_USER_CONFIG> environment variable, if it's
 defined, or else C<~/.sqitch/sqitch.conf>.
 
-=head3 C<project_file>
+=head3 C<local_file>
 
-Returns the path to the project configuration file, which is just
+Returns the path to the local configuration file, which is just
 F<./sqitch.conf>, unless C<$SQITCH_CONFIG> is set, in which case its value
 will be returned.
 
 =head3 C<dir_file>
 
-An alias for C<project_file()> for use by the parent class.
+An alias for C<local_file()> for use by the parent class.
 
 =head3 C<get_section>
 
@@ -112,6 +134,10 @@ An alias for C<project_file()> for use by the parent class.
 
 Returns a hash reference containing only the keys within the specified
 section or subsection.
+
+=head3 C<add_comment>
+
+Adds a comment to the configuration file.
 
 =head1 See Also
 

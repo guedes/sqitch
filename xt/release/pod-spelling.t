@@ -29,6 +29,7 @@ Flipr
 GitHub
 PostgreSQL's
 sqitchtutorial
+sqitchchanges
 VCSes
 Versioning
 metadata
@@ -49,3 +50,16 @@ command's
 unsets
 NL
 multivalue
+init
+relatedly
+postgres
+DateTime
+committer
+committers
+UTC
+timestamp
+CLDR
+lowercased
+unlocalized
+flipr
+

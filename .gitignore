@@ -12,3 +12,5 @@
 *.rpm
 /_rpmbuild
 /target
+.build/
+*.mo

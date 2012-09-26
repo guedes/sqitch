@@ -1,0 +1,13 @@
+=head1 Name
+
+sqitch-init-usage - Sqitch init usage statement
+
+=head1 Usage
+
+  sqitch [options] init project
+  sqitch [options] init --uri uri project
+
+=head1 Options
+
+    --uri   associate a URI with the project plan
+

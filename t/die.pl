@@ -1,6 +1,5 @@
-#!/usr/bin/perl
+use v5.10;
 
-use v5.14;
+say "@ARGV" if @ARGV;
+die 'OMGWTF';
 
-say "@ARGV";
-exit 1;

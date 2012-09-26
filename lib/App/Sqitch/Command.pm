@@ -1,48 +1,80 @@
 package App::Sqitch::Command;
 
-use v5.10;
+use v5.10.1;
 use strict;
 use warnings;
 use utf8;
-use Carp;
 use Try::Tiny;
+use Locale::TextDomain qw(App-Sqitch);
+use App::Sqitch::X qw(hurl);
 use Hash::Merge 'merge';
 use Moose;
 
-has sqitch => (is => 'ro', isa => 'App::Sqitch', required => 1);
+our $VERSION = '0.932';
+
+has sqitch => (
+    is       => 'ro',
+    isa      => 'App::Sqitch',
+    required => 1,
+    handles  => [qw(
+        plan
+        engine
+        run
+        capture
+        probe
+        verbosity
+        trace
+        debug
+        info
+        comment
+        emit
+        vent
+        warn
+        page
+    )],
+);
 
 sub command {
     my $class = ref $_[0] || shift;
     return '' if $class eq __PACKAGE__;
     my $pkg = quotemeta __PACKAGE__;
     $class =~ s/^$pkg\:://;
+    $class =~ s/_/-/g;
     return $class;
 }
 
 sub load {
-    my ($class, $p) = @_;
+    my ( $class, $p ) = @_;
 
     # We should have a command.
     $class->usage unless $p->{command};
+    ( my $cmd = $p->{command} ) =~ s/-/_/g;
 
     # Load the command class.
-    my $pkg = __PACKAGE__ . "::$p->{command}";
+    my $pkg = __PACKAGE__ . "::$cmd";
     try {
         eval "require $pkg" or die $@;
-    } catch {
+    }
+    catch {
+
         # Just die if something choked.
         die $_ unless /^Can't locate/;
 
         # Suggest help if it's not a valid command.
-        __PACKAGE__->new({ sqitch => $p->{sqitch} })->help(
-            qq{"$p->{command}" is not a valid command.}
-        );
+        hurl {
+            ident   => 'command',
+            exitval => 1,
+            message => __x(
+                '"{command}" is not a valid command',
+                command => $cmd,
+            ),
+        };
     };
 
     # Merge the command-line options and configuration parameters
     my $params = $pkg->configure(
         $p->{config},
-        $pkg->_parse_opts($p->{args}),
+        $pkg->_parse_opts( $p->{args} )
     );
 
     # Instantiate and return the command.
@@ -51,22 +83,18 @@ sub load {
 }
 
 sub configure {
-    my ($class, $config, $options) = @_;
+    my ( $class, $config, $options ) = @_;
 
     # Convert option keys with dashes to underscores.
-    for my $k (keys %{ $options }) {
-        next unless (my $nk = $k) =~ s/-/_/g;
+    for my $k ( keys %{$options} ) {
+        next unless ( my $nk = $k ) =~ s/-/_/g;
         $options->{$nk} = delete $options->{$k};
     }
 
     return Hash::Merge->new->merge(
         $options,
-        $config->get_section(section => $class->command),
+        $config->get_section( section => $class->command ),
     );
-}
-
-sub verbosity {
-    shift->sqitch->verbosity;
 }
 
 sub options {
@@ -74,13 +102,13 @@ sub options {
 }
 
 sub _parse_opts {
-    my ($class, $args) = @_;
-    return {} unless $args && @{ $args };
+    my ( $class, $args ) = @_;
+    return {} unless $args && @{$args};
 
     my %opts;
     Getopt::Long::Configure(qw(bundling no_pass_through));
-    Getopt::Long::GetOptionsFromArray($args, \%opts, $class->options)
-        or $class->_pod2usage;
+    Getopt::Long::GetOptionsFromArray( $args, \%opts, $class->options )
+        or $class->usage;
 
     return \%opts;
 }
@@ -91,18 +119,20 @@ sub _bn {
 }
 
 sub _pod2usage {
-    my ($self, %params) = @_;
+    my ( $self, %params ) = @_;
     my $command = $self->command;
     require Pod::Find;
     require Pod::Usage;
     my $bn = _bn;
-    $params{'-input'} ||=
-                Pod::Find::pod_where({'-inc' => 1, '-script' => 1 }, "$bn-$command")
-             || Pod::Find::pod_where({'-inc' => 1, '-script' => 1 }, "sqitch-$command")
-             || Pod::Find::pod_where({'-inc' => 1, '-script' => 1 }, $bn)
-             || Pod::Find::pod_where({'-inc' => 1, '-script' => 1 }, 'sqitch')
-             || Pod::Find::pod_where({'-inc' => 1, '-script' => 1 }, ref $self || $self)
-             || Pod::Find::pod_where({'-inc' => 1, '-script' => 1 }, __PACKAGE__);
+    my $find_pod = sub {
+        Pod::Find::pod_where({ '-inc' => 1, '-script' => 1 }, shift );
+    };
+    $params{'-input'} ||= $find_pod->("$bn-$command")
+                      ||  $find_pod->("sqitch-$command")
+                      ||  $find_pod->($bn)
+                      ||  $find_pod->('sqitch')
+                      ||  $find_pod->(ref $self || $self)
+                      ||  $find_pod->(__PACKAGE__);
     Pod::Usage::pod2usage(
         '-verbose'  => 99,
         '-sections' => '(?i:(Usage|Synopsis|Options))',
@@ -111,105 +141,24 @@ sub _pod2usage {
     );
 }
 
-sub _prepend {
-    my $prefix = shift;
-    my $msg = join '', map { $_  // '' } @_;
-    $msg =~ s/^/$prefix /gms;
-    return $msg;
-}
-
 sub execute {
     my $self = shift;
-    croak(
-        'The execute() method must be called from a subclass of ',
-        __PACKAGE__
+    hurl(
+        'The execute() method must be called from a subclass of '
+        . __PACKAGE__
     ) if ref $self eq __PACKAGE__;
 
-    croak(
-        'The execute() method has not been overridden in ',
-        ref $self
-    );
-}
-
-# Poached from Module::Build.
-sub do_system {
-    my ($self, @cmd) = @_;
-    $self->trace(join ' ' => @cmd);
-    my $status = system @cmd;
-    $self->warn(
-        "'Argument list' was 'too long', env lengths are ",
-        join '' => map { "$_=>" . length($ENV{$_} . '; ') } sort keys %ENV
-    ) if $status and $! =~ /Argument list too long/i;
-    return !$status;
-}
-
-sub trace {
-    my $self = shift;
-    say _prepend 'trace:', @_ if $self->verbosity > 2
-}
-
-sub debug {
-    my $self = shift;
-    say _prepend 'debug:', @_ if $self->verbosity > 1
-}
-
-sub info {
-    my $self = shift;
-    say @_ if $self->verbosity;
-}
-
-sub comment {
-    my $self = shift;
-    say _prepend '#', @_ if $self->verbosity;
-}
-
-sub emit {
-    shift;
-    say @_;
-}
-
-sub warn {
-    my $self = shift;
-    say STDERR _prepend 'warning:', @_;
-}
-
-sub unfound {
-    exit 1;
-}
-
-sub fail {
-    my $self = shift;
-    say STDERR _prepend 'fatal:', @_;
-    exit 2;
-}
-
-sub help {
-    my $self = shift;
-    my $bn = _bn;
-    say STDERR _prepend("$bn:", @_), " See $bn --help";
-    exit 1;
+    hurl 'The execute() method has not been overridden in ' . ref $self;
 }
 
 sub usage {
     my $self = shift;
     require Pod::Find;
-    my $upod = _bn . '-' . $self->command .  '-usage';
+    my $upod = _bn . '-' . $self->command . '-usage';
     $self->_pod2usage(
-        '-input' => Pod::Find::pod_where({'-inc' => 1 }, $upod) || undef,
+        '-input' => Pod::Find::pod_where( { '-inc' => 1 }, $upod ) || undef,
         '-message' => join '', @_
     );
-}
-
-sub bail {
-    my ($self, $code) = (shift, shift);
-    if (@_) {
-        if ($code) {
-            say STDERR @_;
-        } else {
-            say STDOUT @_;
-        }
-    }
-    exit $code;
 }
 
 __PACKAGE__->meta->make_immutable;
@@ -351,14 +300,26 @@ uses to find the command class.
 These methods are mainly provided as utilities for the command subclasses to
 use.
 
-=head3 C<do_system>
+=head3 C<run>
 
-  if !($cmd->do_system('echo hello')) {
-      $cmd->fail('Ooops');
-  }
+  $cmd->run('echo hello');
 
-Executes a system command and waits for it to finish. Returns true if the
-command returned without error, and false if it did not.
+Runs a system command and waits for it to finish. Throws an exception on
+error.
+
+=head3 C<capture>
+
+  my @files = $cmd->capture(qw(ls -lah));
+
+Runs a system command and captures its output to C<STDOUT>. Returns the output
+lines in list context and the concatenation of the lines in scalar context.
+Throws an exception on error.
+
+=head3 C<probe>
+
+  my $git_version = $cmd->capture(qw(git --version));
+
+Like C<capture>, but returns just the C<chomp>ed first line of output.
 
 =head3 C<verbosity>
 
@@ -368,10 +329,8 @@ Returns the verbosity level.
 
 =head3 C<trace>
 
-  $cmd->trace('About to fuzzle the wuzzle.');
-
 Send trace information to C<STDOUT> if the verbosity level is 3 or higher.
-Trace messages will have C<TRACE: > prefixed to every line. If it's lower than
+Trace messages will have C<trace: > prefixed to every line. If it's lower than
 3, nothing will be output.
 
 =head3 C<debug>
@@ -379,7 +338,7 @@ Trace messages will have C<TRACE: > prefixed to every line. If it's lower than
   $cmd->debug('Found snuggle in the crib.');
 
 Send debug information to C<STDOUT> if the verbosity level is 2 or higher.
-Debug messages will have C<DEBUG: > prefixed to every line. If it's lower than
+Debug messages will have C<debug: > prefixed to every line. If it's lower than
 2, nothing will be output.
 
 =head3 C<info>
@@ -406,26 +365,36 @@ Send a message to C<STDOUT>, without regard to the verbosity. Should be used
 only if the user explicitly asks for output, such as for
 C<sqitch config --get core.editor>.
 
+=head3 C<vent>
+
+  $cmd->vent('That was a misage.');
+
+Send a message to C<STDERR>, without regard to the verbosity. Should be used
+only for error messages to be printed before exiting with an error, such as
+when reverting failed changes.
+
+=head3 C<page>
+
+  $sqitch->page('Search results:');
+
+Like C<emit()>, but sends the output to a pager handle rather than C<STDOUT>.
+Unless there is no TTY (such as when output is being piped elsewhere), in
+which case it I<is> sent to C<STDOUT>. Meant to be used to send a lot of data
+to the user at once, such as when display the results of searching the event
+log:
+
+  $iter = $sqitch->engine->search_events;
+  while ( my $change = $iter->() ) {
+      $cmd->page(join ' - ', @{ $change }{ qw(change_id event change) });
+  }
+
 =head3 C<warn>
 
   $cmd->warn('Could not find nerble; using nobble instead.');
 
-Send a warning messages to C<STDERR>. Use if something unexpected happened but
-you can recover from it.
-
-=head3 C<unfound>
-
-  $cmd->unfound;
-
-Exit the program with status code 1. Best for use for non-fatal errors,
-such as when something requested was not found.
-
-=head3 C<fail>
-
-  $cmd->fail('File or directory "foo" not found.');
-
-Send a failure message to C<STDERR> and exit with status code 2. Use if
-something unexpected happened and you cannot recover from it.
+Send a warning messages to C<STDERR>. Warnings will have C<warning: > prefixed
+to every line. Use if something unexpected happened but you can recover from
+it.
 
 =head3 C<usage>
 
@@ -433,21 +402,25 @@ something unexpected happened and you cannot recover from it.
 
 Sends the specified message to C<STDERR>, followed by the usage sections of
 the command's documentation. Those sections may be named "Name", "Synopsis",
-or "Options". Any or all of those will be shown.
+or "Options". Any or all of these will be shown. The doc used to display them
+will be the first found of:
 
-=head3 C<help>
+=over
 
-  $cmd->help('"foo" is not a valid command.');
+=item C<sqitch-$command-usage>
 
-Sends messages to C<STDERR> and exists with an additional message to "See
-sqitch --help". Use if the user has misused the app.
+=item C<sqitch-$command>
 
-=head3 C<bail>
+=item C<sqitch>
 
-  $cmd->bail(3, 'The config file is invalid');
+=item C<App::Sqitch::Command::$command>
 
-Exits with the specified error code, sending any specified messages to
-C<STDOUT> if the exit code is 0, and to C<STDERR> if it is not 0.
+=item C<App::Sqitch::Command>
+
+=back
+
+For an ideal usage messages, C<sqitch-$command-usage.pod> should be created by
+all command subclasses.
 
 =head1 See Also
 
